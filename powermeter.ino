@@ -1,0 +1,281 @@
+/*
+  Debug LED Color Code:
+      Blinking Blue - Connecting to WiFi
+      Blinking Green - Connected to database
+      Blinking Red - Failed to reach database
+      Solid Blue - Running measurements
+      Solid Green - Successfully wrote to database
+      Solid Red - Failed to write to database
+*/
+
+#include <WiFiMulti.h>
+WiFiMulti wifiMulti;
+#define DEVICE "ESP32"
+#include "EmonLib.h"
+#include <InfluxDbClient.h>
+
+
+// Wifi + InfluxDB Details
+#define WIFI_SSID "SSID"
+#define WIFI_PASSWORD "PASSWORD"
+#define INFLUXDB_URL "http://URL:8086"
+#define INFLUXDB_DB_NAME "Database"
+#define INFLUXDB_USER "User"
+#define INFLUXDB_PASSWORD "Password"
+
+// LED Pins
+const int redLED = 25;
+const int blueLED = 26;
+const int greenLED = 27;
+
+// Temperature Sensor Pin
+const int tempPin = 34;
+
+// Influx DB client
+InfluxDBClient client(INFLUXDB_URL, INFLUXDB_DB_NAME);
+
+// CT Clamps
+EnergyMonitor emon1;                // Create an instance
+EnergyMonitor emon2;                // Create an instance
+
+//// Number of Samples for Averaging Function
+const int numReadings = 50;
+
+//// CT Clamp 1 Averaging Variables
+double readings1[numReadings];      // the readings from the analog input
+int readIndex1 = 0;                 // the index of the current reading
+double total1 = 0;                  // the running total
+double average1 = 0;                // the average
+
+// CT Clamp 2 Averaging Variables
+double readings2[numReadings];      // the readings from the analog input
+int readIndex2 = 0;                 // the index of the current reading
+double total2 = 0;                  // the running total
+double average2 = 0;                // the average
+
+// Temperature Sensor Averaging Variables
+double readings3[numReadings];      // the readings from the analog input
+int readIndex3 = 0;                 // the index of the current reading
+double total3 = 0;                  // the running total
+double average3 = 0;                // the average
+
+// Data point
+Point sensor("wifi_status");
+
+void setup()
+{
+
+  Serial.begin(9600);
+
+  // LED Setup
+  pinMode(redLED, OUTPUT);
+  pinMode(greenLED, OUTPUT);
+  pinMode(blueLED, OUTPUT);
+
+  // LED Test
+  digitalWrite(redLED, HIGH);
+  delay(250);
+  digitalWrite(redLED, LOW);
+  digitalWrite(greenLED, HIGH);
+  delay(250);
+  digitalWrite(greenLED, LOW);
+  digitalWrite(blueLED, HIGH);
+  delay(250);
+  digitalWrite(blueLED, LOW);
+  delay(500);
+
+  //Connect WiFi
+  Serial.println("Connecting to WiFi");
+  WiFi.mode(WIFI_STA);
+  wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
+  while (wifiMulti.run() != WL_CONNECTED) {
+    digitalWrite(blueLED, HIGH);
+    Serial.print(".");
+    delay(250);
+    digitalWrite(blueLED, LOW);
+    delay(250);
+  }
+  Serial.println();
+  digitalWrite(blueLED, LOW);
+  delay(500);
+
+  // Set InfluxDB 1 authentication params
+  client.setConnectionParamsV1(INFLUXDB_URL, INFLUXDB_DB_NAME, INFLUXDB_USER, INFLUXDB_PASSWORD);
+
+  // Add constant tags - only once
+  sensor.addTag("device", DEVICE);
+  sensor.addTag("SSID", WiFi.SSID());
+
+  // Check server connection
+  if (client.validateConnection()) {
+    Serial.print("Connected to InfluxDB: ");
+    Serial.println(client.getServerUrl());
+    digitalWrite(greenLED, HIGH);
+    delay(100);
+    digitalWrite(greenLED, LOW);
+    delay(100);
+    digitalWrite(greenLED, HIGH);
+    delay(100);
+    digitalWrite(greenLED, LOW);
+    delay(100);
+    digitalWrite(greenLED, HIGH);
+    delay(100);
+    digitalWrite(greenLED, LOW);
+  } else {
+    Serial.print("InfluxDB connection failed: ");
+    Serial.println(client.getLastErrorMessage());
+    digitalWrite(redLED, HIGH);
+    delay(100);
+    digitalWrite(redLED, LOW);
+    delay(100);
+    digitalWrite(redLED, HIGH);
+    delay(100);
+    digitalWrite(redLED, LOW);
+    delay(100);
+    digitalWrite(redLED, HIGH);
+    delay(100);
+    digitalWrite(redLED, LOW);
+  }
+
+  // Initalize Current Clamps
+  emon1.current(36, 20);             // Current Clamp 1: input pin, calibration.
+  emon2.current(39, 20);             // Current Clamp 2: input pin, calibration.
+}
+
+void loop()
+{
+
+  // Reset debug LEDs
+  digitalWrite(greenLED, LOW);
+  digitalWrite(redLED, LOW);
+  digitalWrite(blueLED, HIGH);
+
+  // Read Sensors and Average Results
+  for (int a = 0; a < numReadings; a++) {
+    readSensors();
+  }
+
+  /***********************************/
+  //                                 //
+  //        Data Processing          //
+  //                                 //
+  /***********************************/
+
+  digitalWrite(blueLED, LOW);
+
+  // Store measured value into point
+  sensor.clearFields();
+  sensor.addField("CT1", average1);
+  sensor.addField("CT2", average2);
+  sensor.addField("WBTemp", average3);
+
+  // Print what are we exactly writing
+  Serial.print("Writing: ");
+  Serial.println(client.pointToLineProtocol(sensor));
+
+  // If no Wifi signal, try to reconnect it
+  if (wifiMulti.run() != WL_CONNECTED) {
+    Serial.println("Wifi connection lost");
+  }
+  // Write point
+  if (!client.writePoint(sensor)) {
+    Serial.print("InfluxDB write failed: ");
+    Serial.println(client.getLastErrorMessage());
+    digitalWrite(redLED, HIGH);
+    delay(1000);
+    digitalWrite(redLED, LOW);
+  } else {
+    digitalWrite(greenLED, HIGH);
+    delay(1000);
+    digitalWrite(greenLED, LOW);
+  }
+
+  //Wait 4s (plus 1s in previous command)
+  delay(4000);
+}
+
+void readSensors() {
+
+  /***********************************/
+  //                                 //
+  //       Current Clamp 1           //
+  //                                 //
+  /***********************************/
+
+  // subtract the last reading:
+  total1 = total1 - readings1[readIndex1];
+  // read from the sensor:
+  readings1[readIndex1] = emon1.calcIrms(1480);
+  // add the reading to the total:
+  total1 = total1 + readings1[readIndex1];
+  // advance to the next position in the array:
+  readIndex1 = readIndex1 + 1;
+  // if we're at the end of the array...
+  if (readIndex1 >= numReadings) {
+    // ...wrap around to the beginning:
+    readIndex1 = 0;
+  }
+  // calculate the average:
+  average1 = total1 / numReadings;
+  //   average1 = emon1.calcIrms(1480);
+
+  /***********************************/
+  //                                 //
+  //       Current Clamp 2           //
+  //                                 //
+  /***********************************/
+
+  // subtract the last reading:
+  total2 = total2 - readings2[readIndex1];
+  // read from the sensor:
+  readings2[readIndex1] = emon2.calcIrms(1480);
+  // add the reading to the total:
+  total2 = total2 + readings2[readIndex1];
+  // advance to the next position in the array:
+  readIndex2 = readIndex2 + 1;
+  // if we're at the end of the array...
+  if (readIndex2 >= numReadings) {
+    // ...wrap around to the beginning:
+    readIndex2 = 0;
+  }
+  // calculate the average:
+  average2 = total2 / numReadings;
+
+  //average2 = emon2.calcIrms(1480);
+
+
+  /***********************************/
+  //                                 //
+  //      Temperature Sensor         //
+  //                                 //
+  /***********************************/
+
+  //Voltage reading from the temperature sensor
+  int reading = analogRead(tempPin);
+
+  // converting that reading to voltage, for 3.3v arduino use 3.3
+  float voltage = reading;
+  voltage /= 1024.0;
+  double temperatureC = (voltage - 0.5) * 100 ;  //converting from 10 mv per degree wit 500 mV offset
+  double temperatureF = (temperatureC * 9.0 / 5.0) + 36.0;
+
+  // subtract the last reading:
+  total3 = total3 - readings3[readIndex1];
+  // read from the sensor:
+  readings3[readIndex1] = temperatureF;
+  // add the reading to the total:
+  total3 = total3 + readings3[readIndex1];
+  // advance to the next position in the array:
+  readIndex3 = readIndex3 + 1;
+  // if we're at the end of the array...
+  if (readIndex3 >= numReadings) {
+    // ...wrap around to the beginning:
+    readIndex3 = 0;
+  }
+  // calculate the average:
+  average3 = total3 / numReadings;
+
+  //  average3 = temperatureF;
+
+  delay(1);
+}
