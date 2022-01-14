@@ -8,20 +8,21 @@
       Solid Red - Failed to write to database
 */
 
-#include <WiFiMulti.h>
-WiFiMulti wifiMulti;
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <Wire.h>
 #define DEVICE "ESP32"
 #include "EmonLib.h"
 #include <InfluxDbClient.h>
 
 
 // Wifi + InfluxDB Details
-#define WIFI_SSID "SSID"
-#define WIFI_PASSWORD "PASSWORD"
-#define INFLUXDB_URL "http://URL:8086"
-#define INFLUXDB_DB_NAME "Database"
-#define INFLUXDB_USER "User"
-#define INFLUXDB_PASSWORD "Password"
+#define WIFI_SSID "RHIT-OPEN"
+#define WIFI_PASSWORD ""
+#define INFLUXDB_URL "http://monitoringserver.reshall.rose-hulman.edu:8086"
+#define INFLUXDB_DB_NAME "Sensors"
+#define INFLUXDB_USER "sensor"
+#define INFLUXDB_PASSWORD "bW7jxSOqoTLhgfdsddcXSq5WLHumeGPUp"
 
 // LED Pins
 const int redLED = 25;
@@ -31,17 +32,20 @@ const int greenLED = 27;
 // Temperature Sensor Pin
 const int tempPin = 34;
 
+// WiFi Hostname (For Uptime Monitoring)
+String hostname = "powermeter";
+
 // Influx DB client
 InfluxDBClient client(INFLUXDB_URL, INFLUXDB_DB_NAME);
 
 // CT Clamps
-EnergyMonitor emon1;                // Create an instance
-EnergyMonitor emon2;                // Create an instance
+EnergyMonitor emon1;   // Circuit 1
+EnergyMonitor emon2;   // Circuit 2
 
-//// Number of Samples for Averaging Function
+// Number of Samples for Averaging Function
 const int numReadings = 50;
 
-//// CT Clamp 1 Averaging Variables
+// CT Clamp 1 Averaging Variables
 double readings1[numReadings];      // the readings from the analog input
 int readIndex1 = 0;                 // the index of the current reading
 double total1 = 0;                  // the running total
@@ -61,6 +65,9 @@ double average3 = 0;                // the average
 
 // Data point
 Point sensor("wifi_status");
+
+// Wifi Define
+WiFiClient espClient;
 
 void setup()
 {
@@ -84,20 +91,8 @@ void setup()
   digitalWrite(blueLED, LOW);
   delay(500);
 
-  //Connect WiFi
-  Serial.println("Connecting to WiFi");
-  WiFi.mode(WIFI_STA);
-  wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
-  while (wifiMulti.run() != WL_CONNECTED) {
-    digitalWrite(blueLED, HIGH);
-    Serial.print(".");
-    delay(250);
-    digitalWrite(blueLED, LOW);
-    delay(250);
-  }
-  Serial.println();
-  digitalWrite(blueLED, LOW);
-  delay(500);
+  //Connect to WiFi
+  setup_wifi();
 
   // Set InfluxDB 1 authentication params
   client.setConnectionParamsV1(INFLUXDB_URL, INFLUXDB_DB_NAME, INFLUXDB_USER, INFLUXDB_PASSWORD);
@@ -278,4 +273,28 @@ void readSensors() {
   //  average3 = temperatureF;
 
   delay(1);
+}
+
+void setup_wifi() {
+  delay(10);
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.setHostname(hostname.c_str());
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    digitalWrite(blueLED, HIGH);
+    Serial.print(".");
+    delay(250);
+    digitalWrite(blueLED, LOW);
+    delay(250);
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  digitalWrite(blueLED, LOW);
+  delay(500);
 }
