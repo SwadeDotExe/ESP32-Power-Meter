@@ -15,10 +15,13 @@
 #include "EmonLib.h"
 #include <InfluxDbClient.h>
 
+// Brownout Detector Disable
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 
 // Wifi + InfluxDB Details
-#define WIFI_SSID "RHIT-OPEN"
-#define WIFI_PASSWORD ""
+const char* ssid = "RHIT-OPEN";
+const char* password = "";
 #define INFLUXDB_URL "http://monitoringserver.reshall.rose-hulman.edu:8086"
 #define INFLUXDB_DB_NAME "Sensors"
 #define INFLUXDB_USER "sensor"
@@ -73,6 +76,8 @@ void setup()
 {
 
   Serial.begin(9600);
+  //disable brownout detector
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
 
   // LED Setup
   pinMode(redLED, OUTPUT);
@@ -168,10 +173,10 @@ void loop()
   Serial.print("Writing: ");
   Serial.println(client.pointToLineProtocol(sensor));
 
-  // If no Wifi signal, try to reconnect it
-  if (wifiMulti.run() != WL_CONNECTED) {
-    Serial.println("Wifi connection lost");
-  }
+//  // If no Wifi signal, try to reconnect it
+//  if (wifiMulti.run() != WL_CONNECTED) {
+//    Serial.println("Wifi connection lost");
+//  }
   // Write point
   if (!client.writePoint(sensor)) {
     Serial.print("InfluxDB write failed: ");
