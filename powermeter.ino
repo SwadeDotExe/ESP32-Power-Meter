@@ -42,8 +42,9 @@ String hostname = "powermeter";
 InfluxDBClient client(INFLUXDB_URL, INFLUXDB_DB_NAME);
 
 // CT Clamps
-EnergyMonitor emon1;   // Circuit 1
-EnergyMonitor emon2;   // Circuit 2
+EnergyMonitor emon1;   // Current 1
+EnergyMonitor emon2;   // Current 2
+EnergyMonitor emon3;   // Voltage
 
 // Number of Samples for Averaging Function
 const int numReadings = 50;
@@ -52,19 +53,25 @@ const int numReadings = 50;
 double readings1[numReadings];      // the readings from the analog input
 int readIndex1 = 0;                 // the index of the current reading
 double total1 = 0;                  // the running total
-double average1 = 0;                // the average
+double current1 = 0;                // the average
 
 // CT Clamp 2 Averaging Variables
 double readings2[numReadings];      // the readings from the analog input
 int readIndex2 = 0;                 // the index of the current reading
 double total2 = 0;                  // the running total
-double average2 = 0;                // the average
+double current2 = 0;                // the average
 
 // Temperature Sensor Averaging Variables
 double readings3[numReadings];      // the readings from the analog input
 int readIndex3 = 0;                 // the index of the current reading
 double total3 = 0;                  // the running total
-double average3 = 0;                // the average
+double tempAvg = 0;                 // the average
+
+// Voltage Sensor Averaging Variables
+double readings4[numReadings];      // the readings from the analog input
+int readIndex4 = 0;                 // the index of the current reading
+double total4 = 0;                  // the running total
+double voltAvg = 0;                 // the average
 
 // Data point
 Point sensor("wifi_status");
@@ -140,6 +147,9 @@ void setup()
   // Initalize Current Clamps
   emon1.current(36, 20);             // Current Clamp 1: input pin, calibration.
   emon2.current(39, 20);             // Current Clamp 2: input pin, calibration.
+
+  // Initalize Voltage Sensor
+  emon3.voltage(35, 234.26, 1.7);  // Voltage: input pin, calibration, phase_shift
 }
 
 void loop()
@@ -165,18 +175,15 @@ void loop()
 
   // Store measured value into point
   sensor.clearFields();
-  sensor.addField("CT1", average1);
-  sensor.addField("CT2", average2);
-  sensor.addField("WBTemp", average3);
+  sensor.addField("CT1", current1);
+  sensor.addField("CT2", current2);
+  sensor.addField("WBTemp", tempAvg);
+  sensor.addField("Voltage", voltAvg);
 
   // Print what are we exactly writing
   Serial.print("Writing: ");
   Serial.println(client.pointToLineProtocol(sensor));
 
-//  // If no Wifi signal, try to reconnect it
-//  if (wifiMulti.run() != WL_CONNECTED) {
-//    Serial.println("Wifi connection lost");
-//  }
   // Write point
   if (!client.writePoint(sensor)) {
     Serial.print("InfluxDB write failed: ");
@@ -216,8 +223,8 @@ void readSensors() {
     readIndex1 = 0;
   }
   // calculate the average:
-  average1 = total1 / numReadings;
-  //   average1 = emon1.calcIrms(1480);
+  current1 = total1 / numReadings;
+  //   current1 = emon1.calcIrms(1480);
 
   /***********************************/
   //                                 //
@@ -239,9 +246,9 @@ void readSensors() {
     readIndex2 = 0;
   }
   // calculate the average:
-  average2 = total2 / numReadings;
+  current2 = total2 / numReadings;
 
-  //average2 = emon2.calcIrms(1480);
+  //current2 = emon2.calcIrms(1480);
 
 
   /***********************************/
@@ -273,9 +280,31 @@ void readSensors() {
     readIndex3 = 0;
   }
   // calculate the average:
-  average3 = total3 / numReadings;
+  tempAvg = total3 / numReadings;
 
-  //  average3 = temperatureF;
+  //  tempAvg = temperatureF;
+
+  /***********************************/
+  //                                 //
+  //        Voltage Sensor           //
+  //                                 //
+  /***********************************/
+  // emon3.calcVI(20,2000);
+  // subtract the last reading:
+  total4 = total4 - readings4[readIndex4];
+  // read from the sensor:
+  readings4[readIndex4] = emon3.Vrms;
+  // add the reading to the total:
+  total4 = total4 + readings4[readIndex4];
+  // advance to the next position in the array:
+  readIndex4 = readIndex4 + 1;
+  // if we're at the end of the array...
+  if (readIndex4 >= numReadings) {
+    // ...wrap around to the beginning:
+    readIndex4 = 0;
+  }
+  // calculate the average:
+  voltAvg = total4 / numReadings;
 
   delay(1);
 }
