@@ -145,11 +145,11 @@ void setup()
   }
 
   // Initalize Current Clamps
-  emon1.current(36, 20);             // Current Clamp 1: input pin, calibration.
-  emon2.current(39, 20);             // Current Clamp 2: input pin, calibration.
+  emon1.current(36, 18.65);             // Current Clamp 1: input pin, calibration.
+  emon2.current(39, 18.65);             // Current Clamp 2: input pin, calibration.
 
   // Initalize Voltage Sensor
-  emon3.voltage(35, 234.26, 1.7);  // Voltage: input pin, calibration, phase_shift
+  emon3.voltage(35, 46.8, 1.7);  // Voltage: input pin, calibration, phase_shift
 }
 
 void loop()
@@ -177,7 +177,7 @@ void loop()
   sensor.clearFields();
   sensor.addField("CT1", current1);
   sensor.addField("CT2", current2);
-  sensor.addField("WBTemp", tempAvg);
+  sensor.addField("Temperature", tempAvg);
   sensor.addField("Voltage", voltAvg);
 
   // Print what are we exactly writing
