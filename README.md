@@ -10,7 +10,7 @@
   * Line-to-Neutral Voltage
   * Current (2 Probes)
 
-  :warning: This project deals with 120 volts which can harm you. I take no responsibility of any damage as a result from this project. :warning:
+  :warning: This project deals with 120 volts which can harm you. :warning:
 
   ## Table of Contents
   * [PCB Design](#pcb)  
@@ -20,7 +20,7 @@
   * [Visualization](#visualization)
 
   ## PCB
-  I created a custom PCB for this project using the EasyEDA software, and then had the PCB manufactured through JCLPCB. I decided to go with a two-layer PCB simply because it is the same price as a one-layer, and has the added benefit of easier routing of the traces. Looking at the routing, I suspect it would be possible to make this a one-layer PCB with some careful placement of the resistors underneath the ESP, but that is for someone else to try :laughing:
+  I created a custom PCB for this project using the EasyEDA software, and then had the PCB manufactured through JCLPCB. I decided to go with a two-layer PCB simply because it is the same price as a one-layer, and has the added benefit of easier routing of the traces. Looking at the routing, I suspect it would be possible to make this a one-layer PCB with some careful placement of the resistors underneath the ESP, but that is for someone else to try!
 
   Something I am going to change in the next revision is making the solder pads for the CT clamps larger, as well as the holes for zip ties. When designing the PCB, it was sort of hard to visualize how big X millimeters is and it just so happened that my calipers ran out of battery. There's nothing wrong with this design, but it just made it cumbersome to solder on. Also the zip tie holes are too close to the connection points, so that needs to be adjusted in the next go-around. Something else I noticed is 120 volts are exposed in the through-hole pins on the bottom of the PCB, which requires some way of insulating if this is going to be installed in an electric panel like I did.
 
